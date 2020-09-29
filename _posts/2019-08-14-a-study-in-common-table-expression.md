@@ -210,7 +210,7 @@ select t1.name, t2.name, t3.name from
 ## Nested Set Model
 A more sophisticated way is to modify the data structure to form a [Nested Set Model](https://en.wikipedia.org/wiki/Nested_set_model). Logically we are trying to label nodes in the hierarchy tree with path boundaries. A tree node has four attributes: a `name` for identification, a `supervisor` pointer referring to its parent node, a `lft` integer representing the lower bound of its subordinates, and a `rgt` integer representing the higher bound of its subordinates. As for the aforementioned table `employee`, the relation tree is as follows. 
 
-![36db161d73eec097b035248f027f27fa](https://blog-1255532044.cos.ap-singapore.myqcloud.com/2020/03/22/36db161d73eec097b035248f027f27fa.svg)
+![nested-set-model.png](/assets/images/nested-set-model.png)
 
 Take *Jack* for instance, we have `lft=2`, `rgt=7` and any node *X* is one of Jack's subordinates if `Jack.lft<X.lft<X.rgt<Jack.rgt`. This tree can be modeled by a table with four columns like `| name | supervisor | lft | rgt |`. And once this table is generated, it's quite convenient to fulfill our request.
 
