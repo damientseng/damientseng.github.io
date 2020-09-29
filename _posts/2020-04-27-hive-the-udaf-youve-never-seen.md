@@ -73,7 +73,7 @@ where rn = 1
 ;
 ```
 The execution plan has two major jobs:   
-```
+```tex
 STAGE DEPENDENCIES:
   Stage-5 is a root stage , consists of Stage-1
   Stage-1
@@ -227,10 +227,44 @@ static class RctAgg extends AbstractAggregationBuffer {
 }
 
 ```
-The complete code can be found [here](https://github.com/damientseng/sak/blob/75830f730d394f8d45cc45010441ae4bb7727ca7/src/main/java/com/damientseng/sak/hive/ql/udf/GenericUDAFRecent.java). An object of type `RctAgg` maintains an `ArrayList` for buffering the intermediate results. This list is later returned to the PTF. The PTF assumes that each value in the buffer corresponds to one record in the partition. So we have to make sure that the size of the buffer is identical to that of the partition, and the order is maintained the same as when they arrive.
+The complete code can be found [here](https://github.com/damientseng/Dive/blob/master/src/main/java/com/damientseng/dive/ql/udf/GenericUDAFRecent.java). An object of type `RctAgg` maintains an `ArrayList` for buffering the intermediate results. This list is later returned to the PTF. The PTF assumes that each value in the buffer corresponds to one record in the partition. So we have to make sure that the size of the buffer is identical to that of the partition, and the order is maintained the same as when they arrive.  
+
+Now let's test the code locally with the help of **junit**. The following test case mocks the lifecycle of a UDAF object. First, the UDAF object is created as the variable `recent`. Then, the handler to `recent` 's `GenericUDAFEvaluator` is obtained as `eval` , which is initialized with mode `GenericUDAFEvaluator.Mode.COMPLETE` . Some data are put through  `eval`'s `iterate` method which does the really work. And finally, the method `terminate` gives the evaluated result. 
+
+```java
+public class GenericUDAFRecentTest extends TestCase {
+
+    public void testRecent() throws HiveException {
+        GenericUDAFRecent recent = new GenericUDAFRecent();
+
+        GenericUDAFEvaluator eval = recent.getEvaluator(
+                new TypeInfo[]{TypeInfoFactory.intTypeInfo, TypeInfoFactory.stringTypeInfo});
+
+        ObjectInspector loi = eval.init(GenericUDAFEvaluator.Mode.COMPLETE,
+                new ObjectInspector[]{PrimitiveObjectInspectorFactory.writableIntObjectInspector,
+                        PrimitiveObjectInspectorFactory.writableStringObjectInspector});
+
+        GenericUDAFEvaluator.AggregationBuffer buffer = eval.getNewAggregationBuffer();
+
+        eval.iterate(buffer, new Object[]{new IntWritable(0), new Text("95")});  // null
+        eval.iterate(buffer, new Object[]{new IntWritable(1), new Text("27")});  // 27
+        eval.iterate(buffer, new Object[]{new IntWritable(0), new Text("86")});  // 27
+        eval.iterate(buffer, new Object[]{new IntWritable(0), new Text("24")});  // 27
+        eval.iterate(buffer, new Object[]{new IntWritable(1), new Text("08")});  // 08
+        eval.iterate(buffer, new Object[]{new IntWritable(0), new Text("76")});  // 08
+
+        Object output = eval.terminate(buffer);
+
+        Object[] expected = {null,
+                new Text("27"), new Text("27"), new Text("27"),
+                new Text("08"), new Text("08")};
+        Assert.assertArrayEquals(expected, ((StandardListObjectInspector) loi).getList(output).toArray());
+    }
+  // ...
+```
 
 
-After a bit of hacking, now let's see if it works. We are creating two temporary tables, `tmp_boot` for logins and `tmp_order` for payments.
+After a bit of hacking and testing, now let's see if it works. We are creating two temporary tables, `tmp_boot` for logins and `tmp_order` for payments.
 ```sql
 --SQL2
 create table tmp_boot
@@ -409,7 +443,56 @@ public static class GenericUDAFRecentEvaluator extends GenericUDAFAbstractRecent
     }
     ...
 ```
-The complete code is [here](https://github.com/damientseng/sak/blob/master/src/main/java/com/damientseng/sak/hive/ql/udf/GenericUDAFRecent.java). Every time after `GenericUDAFEvaluator#iterate` is called for one row, the method `getNextResult` is invoked to get the result of this row. Extra tests show that the streaming version of `recent` is capable of handling partitions with hundreds of millions of records.
+The complete code is [here](https://github.com/damientseng/Dive/blob/master/src/main/java/com/damientseng/dive/ql/udf/GenericUDAFRecent.java). Every time after `GenericUDAFEvaluator#iterate` is called for one row, the method `getNextResult` is invoked to get the result of this row. 
+
+The testing of this implementation is a bit more complicated as we need to mock a `WindowFrameDef` object. Here, the definition of  ``WindowFrameDef`` can be interpreted as `rows between unbounded preceding and current row` in HQL.
+
+```java
+public void testStreamingRecent() throws HiveException {
+
+    Iterator<Integer> inFlags = Arrays.asList(0, 1, 0, 0, 1, 0).iterator();
+    Iterator<String> inSrcs = Arrays.asList("95", "27", "86", "24", "08", "76").iterator();
+    Iterator<Text> outVals = Arrays.asList(null,
+            new Text("27"), new Text("27"), new Text("27"),
+            new Text("08"), new Text("08")).iterator();
+  
+    int inSz = 6;
+    Object[] in = new Object[2];
+  
+    TypeInfo[] inputTypes = {TypeInfoFactory.intTypeInfo, TypeInfoFactory.stringTypeInfo};
+    ObjectInspector[] inputOIs = {PrimitiveObjectInspectorFactory.writableIntObjectInspector,
+            PrimitiveObjectInspectorFactory.writableStringObjectInspector};
+
+    GenericUDAFRecent fnR = new GenericUDAFRecent();
+    GenericUDAFEvaluator fn = fnR.getEvaluator(inputTypes);
+    fn.init(GenericUDAFEvaluator.Mode.COMPLETE, inputOIs);
+    fn = fn.getWindowingEvaluator(new WindowFrameDef(
+            WindowingSpec.WindowType.ROWS,
+            new BoundaryDef(WindowingSpec.Direction.PRECEDING, WindowingSpec.BoundarySpec.UNBOUNDED_AMOUNT),
+            new BoundaryDef(WindowingSpec.Direction.CURRENT, 0)));
+
+    GenericUDAFEvaluator.AggregationBuffer agg = fn.getNewAggregationBuffer();
+
+    ISupportStreamingModeForWindowing oS = (ISupportStreamingModeForWindowing) fn;
+
+    int outSz = 0;
+    while (inFlags.hasNext()) {
+        in[0] = new IntWritable(inFlags.next());
+        in[1] = new Text(inSrcs.next());
+
+        fn.aggregate(agg, in);
+        Object out = oS.getNextResult(agg);
+        assertEquals(out, outVals.next());
+        outSz++;
+    }
+
+    fn.terminate(agg);
+    assertEquals(outSz, inSz);
+}
+```
+
+Extra tests and real-life use-cases show that the streaming version of `recent` is capable of handling partitions with hundreds of millions of records.
+
 # References
 [1] [Hive Windowing and Analytics](https://cwiki.apache.org/confluence/display/Hive/LanguageManual+WindowingAndAnalytics)  
 [2] [GenericUDAFRowNumber](https://github.com/apache/hive/blob/master/ql/src/java/org/apache/hadoop/hive/ql/udf/generic/GenericUDAFRowNumber.java)  
