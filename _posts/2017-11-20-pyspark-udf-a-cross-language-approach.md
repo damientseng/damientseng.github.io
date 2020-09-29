@@ -6,7 +6,7 @@ categories: Spark
 tags: [Spark]
 mathjax: true
 ---
-Apache Spark supports SQL interface for data processing. The functionalities provided by SparkSQL are quite general and thorough. Yet user-defined aggregate function is a must for working with SQL environments. This post discusses how to utilize efficient UDFs and UDAFs in PySpark.  
+Apache Spark supports SQL interface for data processing. The functionalities provided by SparkSQL are quite general and thorough. Yet user-defined aggregate function is a must for working with SQL environments. This post discusses how to utilize UDFs and UDAFs in PySpark efficiently.  
 
 # The Problem
 Although Spark supports implementing UDFs in Python, the performance is much slower than UDFs written in Scala or Java. Due to the design of PySpark, we need a way to push the real workload to the JVM side to alleviate this performance gap. Even worse, UDAFs are limited to JVM languages only, so it's not possible to realize UDAFs in Python for now. In order to address these problems, we need a little bit of knowledge about how PySpark works.
