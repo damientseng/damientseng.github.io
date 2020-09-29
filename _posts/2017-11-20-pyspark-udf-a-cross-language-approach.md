@@ -39,7 +39,7 @@ self._jsc = jsc or self._initialize_context(self._conf._jconf)
 # Reset the SparkConf to the one actually used by the SparkContext in JVM.
 self._conf = SparkConf(_jconf=self._jsc.sc().conf())
 ```
-Note that `pyspark.context.SparkContext` has a member `_jsc`, which is a wrapper arround the Java `SparkContext` object. This actually is a common pattern for PySpark: there are many Python objects that are wrappers arround JVM objects, which conform to the naming convention like `_jxx`. Here are some more examples: `DataFrame` has a `_jdf`, `RDD` has a `_jrdd`, and most importantly, `SparkSession` has a `_jvm`.
+Note that `pyspark.context.SparkContext` has a member `_jsc`, which is a wrapper around the Java `SparkContext` object. This actually is a common pattern for PySpark: there are many Python objects that are wrappers around JVM objects, which conform to the naming convention like `_jxx`. Here are some more examples: `DataFrame` has a `_jdf`, `RDD` has a `_jrdd`, and most importantly, `SparkSession` has a `_jvm`.
 
 
 PySpark's DataFrame API DSL calls are interpreted as their `_jxx` counterparts behind the scene.
@@ -99,9 +99,9 @@ As shown above, `spark._jvm.com.damientseng.spark.udf.operator` is a Py4J wrappe
 >>> spark._jvm.com.damientseng.spark.udf.operator.increment(7)
 8
 ```
-Now that we know mysterious mechanism of PySpark, how does this help with our implementation of UDFs ?
+Now that we know the mechanism of PySpark, how does this help with our implementation of UDFs?
 # UDF
-To boost UDF calls from PySpark, we need a magic to push processing logics to the JVM where data reside. This way, we get to alleviate data serialization/deserialization and communication between Python and JVM processes. We can achieve this in a way similar to calling `operator.increment`. Just one more thing is needed: a way to register the UDF before it is invoked.
+To boost UDF calls from PySpark, we need some magic to push processing logics to the JVM where data reside. This way, we get to alleviate data serialization/deserialization and communication between Python and JVM processes. We can achieve this in a way similar to calling `operator.increment`. Just one more thing is needed: a way to register the UDF before it is invoked.
 
 One way to achieve this to register the function from the JVM side. We need to define a Scala method that handles the registration, which accepts a `SparkSession` as its parameter. As shown below, the method `register` takes a `SparkSession` and registers our UDF `increment` as `incr` .
 ```scala
@@ -180,7 +180,7 @@ JavaObject id=o104
 ```
 
 
-You may find such kind of work-arounds mysterious and awkward. It's true. For one thing, fileds like `_jvm` are prefixed with a single underscore, which indicate they are private variables. Although it's just a convention in Python, these variables are not designed as a part of PySpark's API. So they are not guaranteed to be stable among different versions. Fortunately, starting from version 2.1.0, an official function `registerJavaFunction` is offered for registering UDFs implemented by Java/Scala.
+You may find such kind of workarounds mysterious and awkward. It's true. For one thing, fields like `_jvm` are prefixed with a single underscore, which indicates they are private variables. Although it's just a convention in Python, these variables are not designed as a part of PySpark's API. So they are not guaranteed to be stable among different versions. Fortunately, starting from version 2.1.0, an official function `registerJavaFunction` is offered for registering UDFs implemented by Java/Scala.
 ```python
 """
 https://github.com/apache/spark/blob/4d2d3d47e00e78893b1ecd5a9a9070adc5243ac9/python/pyspark/sql/context.py#L206
@@ -200,7 +200,7 @@ def registerJavaFunction(self, name, javaClassName, returnType=None):
 Spark doesn’t support UDAFs from Python language. Although it's possible to simulate the behavior of a UDAF by combining the built-in UDAF `collect_list` and a plain UDF, the performance is usually low for data sets of real-life scale. A much better alternative is to adopt the strategy described above: implementation by Scala, invocation by Python. Let's walk through an example.
 
 
-Here is a UDAF written in Scala, which gets the count of odd numbers:
+Here is a UDAF wrote in Scala, which gets the count of odd numbers:
 ```scala
 package com.damientseng.spark.udf
 
@@ -243,7 +243,7 @@ object CountOdd {
   }
 }
 ```
-After starting the PySpark promt by providing the jar file, we can register and invoke our UDAF from the Python driver side:
+After starting the PySpark prompt by providing the jar file, we can register and invoke our UDAF from the Python driver side:
 ```
 >>> spark._jvm.com.damientseng.spark.udf.CountOdd.register(spark._jsparkSession)
 >>> nums = spark.range(1, 13)
