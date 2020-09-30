@@ -206,7 +206,7 @@ h4, h5, h6 {
 }
 
 h1 {
-    font-size: 5rem;
+    font-size: 3.6rem;
     letter-spacing: -2px;
     text-indent: -3px;
 }
@@ -350,7 +350,7 @@ pre {
 }
 
 pre code, tt {
-    font-size: inherit;
+    font-size: 14px;
     white-space: -moz-pre;
     white-space: pre;
     background: transparent;
