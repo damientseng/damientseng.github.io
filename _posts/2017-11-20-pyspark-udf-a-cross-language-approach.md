@@ -200,7 +200,7 @@ def registerJavaFunction(self, name, javaClassName, returnType=None):
 Spark doesn’t support UDAFs from Python language. Although it's possible to simulate the behavior of a UDAF by combining the built-in UDAF `collect_list` and a plain UDF, the performance is usually low for data sets of real-life scale. A much better alternative is to adopt the strategy described above: implementation by Scala, invocation by Python. Let's walk through an example.
 
 
-Here is a UDAF wrote in Scala, which gets the count of odd numbers:
+Here is a UDAF written in Scala that gets the count of odd numbers:
 ```scala
 package com.damientseng.spark.udf
 

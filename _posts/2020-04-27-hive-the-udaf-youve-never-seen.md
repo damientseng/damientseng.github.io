@@ -166,10 +166,9 @@ Let's assume for now we have only MapReduce at our toolbox, can we solve the pro
 1. At the reduce side, maintain a variable that records the current `channel`. When a login record (with 1 as its `flag`) is seen, update the value of `channel`; when a purchase record (with 0 as its `flag`), assign the current value of `channel` to it.
 1. Keep the rows whose `flag` are 0 while discarding others.
 
-
-
 While the programming paradigm of MapReduce is simple, writing and tuning a MapReduce program is not. Is it possible to hack Hive to attain the same goal?
 
+Custom mappers and reducers is supported by Hive with the syntax `transform`. It works quite similar to Hadoop's streaming functionality. Data are fed to custom scripts from stdin and results are dumped to stdout.  `transform`  makes programming with Hive more flexible as users can code their processing logics in  languages other than Java. But it comes with extra performance penalty since inter-process data communication is introduced. Also, the introduction of yet another language usually means a downgrade of the maintainability of the whole project. In my opinion, this should be our last resort rather than first choice. So in this post, I'm offering a native (though not so intuitive) solution, i.e. a user-defined function.
 
 Hive's UDF API can be classified into three categories by the quantitative relation of their input and output: the 1-to-1 UDF, the many-to-1 UDAF, and the 1-to-many-UDTF. But these well-known types seem useless to our problem. What we need, is a `row_number`-like analytics function. While possessing a 1-to-1 input-output relation, we also need to be able to do partitioning on certain columns and consequently do some calculations under the context of an individual partition.
 
