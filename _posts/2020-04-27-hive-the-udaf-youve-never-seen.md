@@ -36,7 +36,7 @@ channel   string
 
 # Baseline: The Usual Way
 Before a purchase, a `uid` may login several times from varying channels. We can left-join `dw_pay` with `dw_boot` by the `uid` column, and then calculate the time-span between each pair of login-pay logs. The gap is formallized as $$\Delta = pay\_dt-boot\_dt\gt0 $$. And finally, for each payment, we just keep the pair with the smallest $$\Delta \gt0 $$. With HQL, it can be implemented as follows:
-```sql
+~~~ sql
 -- SQL1
 with cte1 as (
     select
@@ -71,7 +71,7 @@ select
 from cte2
 where rn = 1
 ;
-```
+~~~
 The execution plan has two major jobs:   
 ```tex
 STAGE DEPENDENCIES:
@@ -184,7 +184,7 @@ Here the `partition by` and `order by` are natively supported by Hive, so all we
 
 
 It turns out the only methods that need concrete implementation are `iterate` and `terminate`. Inside the configuration method `init`, we enforce the mode to be `COMPLETE` by simply throwing an exception if it's not. The methods `merge` and `terminatapartial` works with modes `PARTIAL1`, `PARTIAL2`, `FINAL`, so exceptions are thrown if they are reached. This is what our implementation looks like:
-```java
+~~~ java
 // for processing an individual record
 public void iterate(AggregationBuffer agg, Object[] parameters) throws HiveException {
     assert (parameters.length == 2);
@@ -224,11 +224,10 @@ static class RctAgg extends AbstractAggregationBuffer {
 
     void update(Object src) {this.currSrc = src;}
 }
-
-```
+~~~
 The complete code can be found [here](https://github.com/damientseng/Dive/blob/master/src/main/java/com/damientseng/dive/ql/udf/GenericUDAFRecent.java). An object of type `RctAgg` maintains an `ArrayList` for buffering the intermediate results. This list is later returned to the PTF. The PTF assumes that each value in the buffer corresponds to one record in the partition. So we have to make sure that the size of the buffer is identical to that of the partition, and the order is maintained the same as when they arrive.  
 
-Now let's test the code locally with the help of **junit**. The following test case mocks the lifecycle of a UDAF object. First, the UDAF object is created as the variable `recent`. Then, the handler to `recent` 's `GenericUDAFEvaluator` is obtained as `eval` , which is initialized with mode `GenericUDAFEvaluator.Mode.COMPLETE` . Some data are put through  `eval`'s `iterate` method which does the really work. And finally, the method `terminate` gives the evaluated result. 
+Now let's test the code locally with the help of **junit**. The following test case mocks the lifecycle of a UDAF object. First, the UDAF object is created as the variable `recent`. Then, the handler to `recent` 's `GenericUDAFEvaluator` is obtained as `eval` , which is initialized with mode `GenericUDAFEvaluator.Mode.COMPLETE` . Some data are put through  `eval`'s `iterate` method which does the really work. And finally, the method `terminate` gives the evaluated result.
 
 ```java
 public class GenericUDAFRecentTest extends TestCase {
@@ -442,7 +441,7 @@ public static class GenericUDAFRecentEvaluator extends GenericUDAFAbstractRecent
     }
     ...
 ```
-The complete code is [here](https://github.com/damientseng/Dive/blob/master/src/main/java/com/damientseng/dive/ql/udf/GenericUDAFRecent.java). Every time after `GenericUDAFEvaluator#iterate` is called for one row, the method `getNextResult` is invoked to get the result of this row. 
+The complete code is [here](https://github.com/damientseng/Dive/blob/master/src/main/java/com/damientseng/dive/ql/udf/GenericUDAFRecent.java). Every time after `GenericUDAFEvaluator#iterate` is called for one row, the method `getNextResult` is invoked to get the result of this row.
 
 The testing of this implementation is a bit more complicated as we need to mock a `WindowFrameDef` object. Here, the definition of  ``WindowFrameDef`` can be interpreted as `rows between unbounded preceding and current row` in HQL.
 
@@ -454,10 +453,10 @@ public void testStreamingRecent() throws HiveException {
     Iterator<Text> outVals = Arrays.asList(null,
             new Text("27"), new Text("27"), new Text("27"),
             new Text("08"), new Text("08")).iterator();
-  
+
     int inSz = 6;
     Object[] in = new Object[2];
-  
+
     TypeInfo[] inputTypes = {TypeInfoFactory.intTypeInfo, TypeInfoFactory.stringTypeInfo};
     ObjectInspector[] inputOIs = {PrimitiveObjectInspectorFactory.writableIntObjectInspector,
             PrimitiveObjectInspectorFactory.writableStringObjectInspector};
