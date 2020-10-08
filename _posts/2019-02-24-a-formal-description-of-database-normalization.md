@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "A Formalized Definition of Database Normalization"
+title: "A Formal Description of Database Normalization"
 author: "Damien Tseng"
 categories: "Data-Warehouse"
 tags: [Data Warehouse]
