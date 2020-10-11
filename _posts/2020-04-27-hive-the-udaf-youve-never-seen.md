@@ -496,4 +496,4 @@ Extra tests and real-life use-cases show that the streaming version of `recent` 
 [2] [GenericUDAFRowNumber](https://github.com/apache/hive/blob/master/ql/src/java/org/apache/hadoop/hive/ql/udf/generic/GenericUDAFRowNumber.java)  
 [3] [HIVE-13936](https://issues.apache.org/jira/browse/HIVE-13936)  
 [4] [HIVE-7062](https://issues.apache.org/jira/browse/HIVE-7062)  
-[5] [GenericUDAFRecent](https://github.com/damientseng/sak/blob/master/src/main/java/com/damientseng/sak/hive/ql/udf/GenericUDAFRecent.java)  
+[5] [GenericUDAFRecent](https://github.com/damientseng/Dive/blob/master/src/main/java/com/damientseng/dive/ql/udf/GenericUDAFRecent.java)  
