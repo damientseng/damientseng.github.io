@@ -20,7 +20,7 @@ from (
 ) tmp;
 ```
 
-The frustrating thing is, we don’t always benefit from the efforts of rewriting, while extra complexity is surely introduced to compromise the maintainability of code. Some folks, especially those who have just started coding with Hive SQL, tend to rewrite wherever possible. It's great to realize the importance of efficiency optimization, whereas it's even more important to know what exactly you are doing.
+The frustrating thing is, we don’t always benefit from the efforts of rewriting, while extra complexity is surely introduced to compromise the maintainability of code. Some folks, especially those who have just started coding with Hive SQL, tend to rewrite wherever possible. It's great to realize the importance of efficiency optimization, whereas it's even more important to know what's really happening.
 
 
 This post reviews some of the most commonly used code rewriting skills. I'll try to explain their assumptions and underlying mechanism, their pitfalls, and the suitable way of using them. Let's get started distinct aggregations.
@@ -93,7 +93,7 @@ group by ca;
 It's expected that this code is translated into two jobs. The first job tries to make the column `cc` distinct within each group of `ca`, such that a follow-up job can get a distinct count by just calculating a `count(1)`. But unexpectedly, _SQL4_ is still executed with just one job as if no rewriting was done.  
 
 
-Well, this is interesting, though not surprising at all. A remarkable part of Hive's built-in efforts to query optimization was to minimize the shuffling cost. One of the efforts tries to remove extra jobs if the data grouped by some keys are later grouped by a subset of these keys. Let’s take _SQL4_ for instance. The subquery which groups data by `ca` and `cc` is later referred to for some aggregations on  `ca` only. So a direct translation of this query has two shuffles. This, of course, has a shorter equivalence with only one shuffle. Hive sees this pattern and "optimizes" the code for you, as if the code is reversed back to _SQL3_, leaving the user confused and frustrated.
+Well, this is interesting, though not surprising at all. A remarkable part of Hive's built-in efforts to query optimization was to minimize the shuffling cost. One of the efforts tries to remove extra jobs if the data grouped by some keys are later grouped by a subset of these keys. Let’s take _SQL4_ for instance. The subquery which groups data by `ca` and `cc` is later referred to for some aggregations on  `ca` only. So a direct translation of this query has two shuffles. This, of course, has a shorter equivalence with only one shuffle. Hive sees this pattern and "optimizes" the code, as if the code is reversed back to _SQL3_, leaving the user confused and frustrated.
 
 Though this mechanism was introduced quite early, since version 0.6.0, it's not that well-known. It can be turned off by setting `hive.optimize.reducededuplication` to `false`. But still, there's a better way for sure.
 
