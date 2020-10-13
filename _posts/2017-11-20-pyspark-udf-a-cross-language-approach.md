@@ -42,7 +42,7 @@ self._conf = SparkConf(_jconf=self._jsc.sc().conf())
 Note that `pyspark.context.SparkContext` has a member `_jsc`, which is a wrapper around the Java `SparkContext` object. This actually is a common pattern for PySpark: there are many Python objects that are wrappers around JVM objects, which conform to the naming convention like `_jxx`. Here are some more examples: `DataFrame` has a `_jdf`, `RDD` has a `_jrdd`, and most importantly, `SparkSession` has a `_jvm`.
 
 
-PySpark's DataFrame API DSL calls are interpreted as their `_jxx` counterparts behind the scene.
+PySpark's DataFrame API DSL calls are interpreted to their `_jxx` counterparts behind the scene.
 ```python
 """
 https://github.com/apache/spark/blob/4d2d3d47e00e78893b1ecd5a9a9070adc5243ac9/python/pyspark/sql/dataframe.py#L373
@@ -50,7 +50,6 @@ https://github.com/apache/spark/blob/4d2d3d47e00e78893b1ecd5a9a9070adc5243ac9/py
 @since(1.3)
 def count(self):
     """Returns the number of rows in this :class:`DataFrame`.
-
     >>> df.count()
     2
     """
@@ -58,7 +57,7 @@ def count(self):
 ```
 
 
-The filed `SparkSession._jvm` is connected to the JVM process through a gateway (a Py4J JavaGateway).
+The field `SparkSession._jvm` is connected to the JVM process through a gateway (a Py4J JavaGateway).
 ```python
 """
 https://github.com/apache/spark/blob/4d2d3d47e00e78893b1ecd5a9a9070adc5243ac9/python/pyspark/context.py#L252
@@ -85,7 +84,7 @@ object operator {
   def increment(a: Int): Int = a + 1
 }
 ```
- After packing to generating a jar file, pyspark is started and the jar file is provided through parameters:
+After packing to generate a jar file, pyspark is started and the jar file is provided through parameters:
 ```bash
 ./bin/pyspark --jars .../sparkudf_2.11-0.1.jar
 ```
