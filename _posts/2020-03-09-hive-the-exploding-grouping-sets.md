@@ -9,7 +9,7 @@ mathjax: true
 <br />
 Our data warehouse was built on Hive. One of the common use cases is running `grouping sets`-like queries to generate multi-dimensional data cubes. Recently we got some feedbacks complaining about the performance: analyst claiming that it takes forever even for the most straightforward queries containing `with cube` to finish.  
 
-Let's take a simplified case for example. There is a take `mdb.dw_tb_d` with three columns: `ca` , `cb` , `uid` . And we try to calculate a cube with `ca` and `cb` as dimensions, and `count(*)` and `count(distinct uid)` as measures. Using HQL, it's expressed as follows:
+Let's take a simplified case for example. There is a table `mdb.dw_tb_d` with three columns: `ca` , `cb` , `uid` . And we try to calculate a cube with `ca` and `cb` as dimensions, and `count(*)` and `count(distinct uid)` as measures. Using HQL, it's expressed as follows:
 
 ```sql
 -- SQL1
@@ -26,13 +26,13 @@ with cube
 # Potential Issues
 As simple as *SQL1* is, it shows the business intention in an intuitive manner. Most of the time, it works like a charm. But sometimes it doesn’t: the running time might be ridiculously long. To understand the issue, we may need a little bit of knowledge about how grouping sets is implemented in Hive.  
 
-To generate multi-dimensional results, it means that every row in the original table should have some impacts on multiple rows in the result set. Say we have *N* dimensions, there will be $$k=2^N$$ ways to combine these dimensions, and each row contributes to every kind of combination. To achieve this, Hive makes *k* copies of each row at the map side and attaches a tag named `GROUPING__ID` along with these copies. Assuming $$N=3$$, there are 8 different `GROUPING__ID`s whose binary format range from `0b000` to `0b111`. The three positions correspond to the states of the three dimensions: whether they are kept as a detailed value or aggregated in a particular group. Note that `with cube` and `rollup` are just syntax sugars, they are translated into `grouping sets`  before execution. Since there may be a huge number of copies when *N* is large, it's mandatory to turn on map-side aggregation (there is a [patch](https://issues.apache.org/jira/browse/HIVE-3508) that removes this restriction). Map-side aggregation is implemented with hash maps, when data explode, each map task may have a huge workload, thus slowing down the execution.  
+To generate multi-dimensional results, it means that every row in the original table should have some impacts on multiple rows in the result set. Say we have *N* dimensions, there will be $$k=2^N$$ ways to combine these dimensions, and each row contributes to every kind of combination. To achieve this, Hive makes *k* copies of each row at the map side and attaches a tag named `GROUPING__ID` along with these copies. Assuming $$N=3$$, there are 8 different `GROUPING__ID`s whose binary format range from `0b000` to `0b111`. The three positions correspond to the states of the three dimensions: whether they are kept as a detailed value or aggregated in a particular group. Note that `with cube` and `rollup` are just syntax sugars, they are translated into `grouping sets`  before execution. Since there may be a huge number of copies when *N* is large, it's mandatory to turn on map-side aggregation (there is a [patch](https://issues.apache.org/jira/browse/HIVE-3508) that removes this restriction). Map-side aggregation is implemented with hashmaps, when data explode, each map task may have a huge workload, thus slowing down the execution.  
 
-Let's revisit *SQL1*. It can be translated into grouping-sets style as `((ca, cb), (ca), (cb), ())`. The last group has no dimension at all, which leads to global aggregation on the whole data set. This means that the partitioning key of this group is identical: *null*. So there is a single reduce task that needs to process all the data in the table `mdb.dw_d`. It's bad news for the cardinality aggregation `count(distinct uid)`: skewed workload fails to utilize parallelism and severely hinders the query from parallel execution. Although data skew may happen to other kinds of dimension combinations, the takeaway is it happens.
+Let's revisit *SQL1*. It can be translated into grouping-sets style as `((ca, cb), (ca), (cb), ())`. The last group has no dimension at all, which leads to global aggregation on the whole data set. This means that the partitioning key of this group is identical: *null*. So there is a single reduce task that needs to process all the data in the table `mdb.dw_tb_d`. It's bad news for the cardinality aggregation `count(distinct uid)`: skewed workload fails to utilize parallelism and severely hinders the query from parallel execution. Although data skew may happen to other kinds of dimension combinations, the takeaway is it happens.
 
 The next question is, how can we tune *SQL1* for better performance?
 # Cool Down
-When seeing a reduce phase stuck as 99% for a long time, an experienced user should realize that there's data skew at the reduce side. Compared with other issues, this one is easier to spot. And the cure to it is broadly addressed.  
+When seeing a reduce phase stuck at 99% for a long time, an experienced user should realize that there's data skew at the reduce side. Compared with other issues, this one is easier to spot. And the cure to it is broadly addressed.  
 
 First, we can try to take the `with cube` apart, and optimize the `count distinct` aggregation by a sub-query. `count distinct` has two logically equivalent expressions:
 ```sql
@@ -72,9 +72,9 @@ from (
 ;
 ```
 
-The grouping with no dimension is explicitly expressed, and it's combined with other groups by `union all`. Of course, we don’t wanna end up running two jobs without dependency consecutively, so we turn on parallel execution by setting `set hive.exec.parallel = true;`
+The grouping with no dimension is explicitly expressed, and it's combined with other groups by `union all`. Of course, we don’t wanna end up consecutively running two jobs without dependency, so we turn on parallel execution by setting `set hive.exec.parallel = true;`
 
-As mentioned above, data skew may happen to any kind of group. As such, this kind of decomposing and rewriting can be taken to the extreme, leading to *SQL3*. This strategy not only avoids data skew but also speeds up by utilizing higher parallelism(though it's way too verbose, we'll come back at this later). One important thing to note: the performance improvement is not 100% guaranteed, as we are introducing one more stage into each sub-query which costs one more expensive shuffle phase.
+As mentioned above, data skew may happen to any kind of group. As such, this kind of decomposing and rewriting can be taken to the extreme, leading to *SQL3*. This strategy not only avoids data skew but also speeds up by utilizing higher parallelism(though it's way too verbose, we'll come back to this later). One important thing to note: the performance improvement is not 100% guaranteed, as we are introducing one more stage into each sub-query which costs one more expensive shuffle phase.
 ```sql
 -- SQL3
 set hive.exec.parallel = true;
@@ -302,7 +302,7 @@ Time taken: 440.337 seconds, Fetched: 352 row(s)
 ```
 Although Stage-1 has only 2 reducers -- thus generating at most 2 files, the subsequent Stage-2 processes uncompressed TextFile at significantly higher parallelism. Now we have 36 mappers for data explosion.  
 
-In fact, Hive has a built-in strategy optimization that does exactly this. When the number of combination groups is greater than `hive.new.job.grouping.set.cardinality`(defaults to 30), an additional group of MR is introduced. It aggregates on all the columns specified in the `group by` clause. The drawback is that it does not support explicit `count distinct`. But anyway, we can get rid of the first CTE in *SQL7*. Now we have *SQL8*, which is almost identical to *SQL4* except a configuration.
+In fact, Hive has a built-in optimization strategy which does exactly this. When the number of combination groups is greater than `hive.new.job.grouping.set.cardinality`(defaults to 30), an additional group of MR is introduced. It aggregates on all the columns specified in the `group by` clause. The drawback is that it does not support explicit `count distinct`. But anyway, we can get rid of the first CTE in *SQL7*. Now we have *SQL8*, which is almost identical to *SQL4* except a configuration.
 ```sql
 -- SQL8
 set hive.new.job.grouping.set.cardinality=3;
@@ -407,6 +407,6 @@ Time taken: 388.211 seconds, Fetched: 352 row(s)
 
 This way, the performance of Stage-1 is optimal, and we don’t have the risk of generating too many small files when there is an `insert`. Compared with the origin table, the result set is small, so the workload of Stage-3 is quite low.
 # Summary
-In the article, we tried to address the problem of data explosion when using Hive with `grouping sets`. The intro describes the problem with a simple example, which offers *SQL1* as a starting point of tuning. The rest of this writing takes several steps to solve this problem.  
+In this post, we tried to address the problem of data explosion when using Hive with `grouping sets`. The intro describes the problem with a simple example, which offers *SQL1* as a starting point of tuning. The rest of this writing takes several steps to solve the problem.  
 
 By decomposition and rewriting, we arrive at *SQL3*, which has the optimal time efficiency, but it's not maintainable. By trading efficiency for readability, *SQL4* is achieved. Later efforts are devoted to handling data explosion with higher parallelism while avoiding other problems like small files. Finally, we get to *SQL9* and *SQL10*, which attains an elegant balance between performance and maintainability/readability.
